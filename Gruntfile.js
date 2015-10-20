@@ -1,4 +1,5 @@
 // aws s3 sync .tmp s3://varik.ru/dev/mien --recursive --region eu-central-1 --acl public-read
+// aws s3 sync .tmp s3://varik.ru/dev/mien/2 --recursive --region eu-central-1 --acl public-read
 
 // Generated on 2015-09-07 using
 // generator-webapp 1.0.1

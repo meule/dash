@@ -1,4 +1,6 @@
-function Table(rawData, meta, container = '.dash-table') {
+/*jshint -W030*/
+
+function T(rawData, meta, container = '.dash-table') {
 
   var vKeys = meta.vKeys,
       hKeys = meta.hKeys,
@@ -9,7 +11,12 @@ function Table(rawData, meta, container = '.dash-table') {
       fName = meta.fName,
       timeExtent = d3.extent(rawData, d => d._date),
       data = processData(rawData,vKeys, hKeys),
-      fold = {};
+      fold = {},
+      svgHeight = 23,
+      svgWidth = 40,
+      svgInfoHeight = 23,
+      svgInfoWidth = 80,
+      isInfo;
 
   data.forEach( (d, i) => d.i = i );
 
@@ -27,25 +34,30 @@ function Table(rawData, meta, container = '.dash-table') {
 
 
 
-  function processData(_rawData,_vKeys, _hKeys){
-    console.log(_rawData.length,_vKeys, _hKeys)
+  function processData(_rawData, _vKeys, _hKeys){
+    console.log(_rawData.length,_vKeys, _hKeys);
     var _data = DD.tree2(_rawData, _vKeys, _hKeys);
-    DD.calcStat(_data);
+    DD.addParent(_data);
     DD.byDate(_data);
+    DD.calcStat(_data);
     DD.addHeads(_data);
+    DD.calcDelta(_data);
+    DD.redDots(_data, meta.redgreen.deltaRed);
     return _data;
   }
 
   function makeTable(table, data, type, _hKeys, _vKeys, _hName, _vName){
     console.log(type,data,hName);
     this.type = type;
+    isInfo = type != 'base';
     var self = this,
         tbody = table.append('tbody'),
         tr = tbody.selectAll('tr').data(data).enter().append('tr')
           .attr('class', d => (d.head ? 'level-head ' : '') + ' level-' + d.level ),
         trHead = tr.filter( d => d.head ),
         trBody = this.trBody = tr.filter( d => !d.head )
-          .on('click', type == 'base' ? showInfo : showErrors),
+          .on('click', type == 'base' ? showInfo : showErrors)
+          .classed('red-dot', d => d.redDot ),
         td = tr.selectAll('td').data( d => d.columns ).enter().append('td'),
         tdHead = td.filter( d => d.head )
           .attr('class', d => 'level-head level-' + d.level + ' depth-' + d.depth ),
@@ -62,9 +74,13 @@ function Table(rawData, meta, container = '.dash-table') {
           .on('click', onSortByValue)
           .each( function(d) { d.thisValue = this; } ),
         tdHeadV = tdHead.filter( d => d.head == 'v' )
-          .attr('class', d => 'head-v level-head level-' + d.level + ' depth-' + (d.depth) )
-          .text( d => l2k(keysFormat(d.keys, _vName), d.depth) ).filter( d => d.level )
+          .attr('class', d => 'head-v level-head level-' + d.level + ' depth-' + d.depth ),
+        tdHeadVClickable = tdHeadV
+          .filter( d => d.level )
           .on('click', function(d) { d.level && d3.event.stopPropagation(); foldV(d); }),
+        tdHeadVDot = tdHeadV.append('span').classed('dot', 1),
+        tdHeadVText = tdHeadV.append('span')
+          .text( d => l2k(keysFormat(d.keys, _vName), d.depth) ),
         tdBody = td.filter( d => !d.head ),
         timeData = tdBody.append('div')
           .classed('time-data', 1),
@@ -72,42 +88,43 @@ function Table(rawData, meta, container = '.dash-table') {
           .classed('value-data', 1),
         sparcle = timeData.append('div').classed('sparcle', 1)
           .filter( d => d.byDate )
-            .append('svg')
-            .each( function(d){
-              makeSparcle(this, d.byDate, [0, d.stat.max], timeExtent );
-            } ),
+            .append('svg').attr('shape-rendering' ,"optimizeSpeed")
+              .attr('width', svgWidth).attr('height', svgHeight)
+              .append('path')//.each( d => d.byDate )
+              .attr('d', makeSparcle),
         barChart = valueData.append('div').classed('barchart', 1),
         bar = barChart.append('div').classed('bar', 1)
           .style('width', function(d){
             //console.log(this.parentNode.offsetHeight , d.values.length , d.stat.max, this.parentNode.offsetHeight * d.values.length / d.stat.max)
-            return this.parentNode.offsetWidth * d.values.length / d.stat.max + 'px';
+            return svgWidth * d.values.length / d.stat.max + 'px';
           }),
         delta = timeData.append('div').classed('delta numbers', 1)
           .filter( d => d.byDate.length > 1 )
-          .text( d => formatDelta(d.delta = (d.byDate[d.byDate.length-1].value - d.byDate[0].value) / d.byDate[0].value) ),
+          .text( d => formatDelta(d.delta)),
         value = valueData.append('div').classed('value numbers', 1)
           .text( d => d.values.length ),
         tdBodyTime = tdBody.filter( d => d.byDate )
           .classed('with-time', 1)
-          .classed('delta-pos', d => d.delta < -0.1 )
-          .classed('delta-neg', d => d.delta > 0.1);
+          .classed('delta-pos', d => d.delta < meta.redgreen.deltaGreen )
+          .classed('delta-neg', d => d.delta > meta.redgreen.deltaRed );
+
     this.topleft = table.select('tr.level-head td.head-v').classed('topleft-cell', 1);
-    tdHeadV.append('span');
-    tdHeadHName.append('span');
+    tdHeadV.append('span').classed('expander', 1);
+    tdHeadHName.append('span').classed('expander', 1);
     //console.log(type);
     if (type == 'info'){
       barChart.each(function(){ this.parentNode.appendChild(this); });
     }
 
     function showErrors(row){
-      console.log(row.keys['ErrorType'],row);
-      if (row.keys['ErrorType'] && row.values.length && self.showErrorHash != row.hash) {
+      console.log(row.keys.ErrorType,row);
+      if (row.keys.ErrorType && row.values.length && self.showErrorHash != row.hash) {
         self.errorsDiv && self.errorsDiv.remove();
-        var errors = row.values.map( d => d['ErrorMessage'] ),
+        var errors = row.values.map( d => d.ErrorMessage ),
             errorsDiv = trBody.filter( d => d.hash == row.hash ).select('td.head-v')
               //.on('mouseout', d => errorsDiv.remove() )
               .append('div').classed('error-info', true)
-                .on('click', d => { d3.event.stopPropagation(); self.showErrorHash = 0; errorsDiv.remove()} );
+                .on('click', d => { d3.event.stopPropagation(); self.showErrorHash = 0; errorsDiv.remove(); } );
         errorsDiv.selectAll('p').data(errors).enter().append('p')
           .html( d => d );
         console.log(console.log(errors));
@@ -133,10 +150,10 @@ function Table(rawData, meta, container = '.dash-table') {
       if ( head.level > 0 ) {
         el.filter( d => d.level == head.level && compare(head, d) )
           .classed('folded', d => folded = d.folded = !d.folded );
-        if (folded)
+        if (folded){
           el.filter( d => d.level < head.level && compare(head, d) )
-            .classed('hidden', 1 ).classed('folded', d => d.folded = true )
-        else {
+            .classed('hidden', 1 ).classed('folded', d => d.folded = true );
+        }else {
           el.filter( d => d.level == head.level - 1 && compare(head, d) )
             .classed('hidden', 0);
         }
@@ -151,7 +168,7 @@ function Table(rawData, meta, container = '.dash-table') {
 
     var folds = { h: [], v:[] };
     function _fold(el, depth, _folds){
-      console.log(el, depth, _folds, _folds[depth])
+      console.log(el, depth, _folds, _folds[depth]);
       if (_folds[depth]) {
         _folds[depth] = false;
         el.filter( d=> d.depth == depth ).classed('folded', d => d.folded = false );
@@ -226,9 +243,9 @@ function Table(rawData, meta, container = '.dash-table') {
       var obj = {};
       for (var key in keys){
         obj[key] = keys[key].replace(/_/g,' ');
-        if (key == 'AssociatedStandard')
-          obj[key] = obj[key].replace('CCSS.ELA-', '').replace('LITERACY.', 'Literacy. ')
-        else
+        if (key == 'AssociatedStandard'){
+          obj[key] = obj[key].replace('CCSS.ELA-', '').replace('LITERACY.', 'Literacy. ');
+        }else
           obj[key] = toTitleCase(obj[key]);
       }
       if (overallName){
@@ -249,20 +266,27 @@ function Table(rawData, meta, container = '.dash-table') {
 
     return is;
   }
-  function makeSparcle(svg, data, extent, timeExtent, info){
-    var parent = !info ? svg.parentNode.parentNode : svg.parentNode,
+  function makeSparcle(d){
+    var x = d3.scale.linear().range([1, (isInfo ? svgInfoWidth : svgWidth) -1])
+          .domain( timeExtent ),
+        y = d3.scale.linear().range([isInfo ? svgInfoHeight - 20 : svgHeight - 1, 1])
+          .domain( [0, d.dateStat.max] ),
+        line = d3.svg.line().x( d => x(d.date) ).y( d => y(d.value) );
+    return line(d.byDate);
+  }
+
+  function makeInfoSparcle(svg, data, extent, timeExtent){
+    var parent = svg.node().parentNode,
         width = parent.offsetWidth,
         height = parent.offsetHeight,
-        svg = d3.select(svg),
         x = d3.scale.linear().range([1, width-1])
           .domain( timeExtent || d3.extent(data, d => d.date ) ),
-        y = d3.scale.linear().range([info ? height - 20 : height - 1, 1])
+        y = d3.scale.linear().range([ height - 20, 1])
           .domain( extent || d3.extent(data, d => d.value ) ),
         line = d3.svg.line().x( d => x(d.date) ).y( d => y(d.value) ),
         path = svg.attr('width', width).attr('height', height)
           .append('path').datum(data).attr('d', line);
 
-    if (info) {
       var axis = svg.append('line')
             .attr({ x1: x(0), y1: y(0), x2: x.range()[1], y2: y(0) + 1, class: 'axis' }),
           dates = svg.selectAll('text').data(timeExtent).enter().append('text').attr({
@@ -271,10 +295,8 @@ function Table(rawData, meta, container = '.dash-table') {
             }).text( d => d3.time.format('%d %b %Y')(d) );
       svg.append('line').attr({ x1: x.range()[0], y1: y(0)+1, x2: x.range()[0], y2: y(0) + 6, class: 'axis' });
       svg.append('line').attr({ x1: x.range()[1], y1: y(0)+1, x2: x.range()[1], y2: y(0) + 6, class: 'axis' });
-    }
     return { path: path, y: y };
   }
-
 
   function showInfo(row){
     console.log(row);
@@ -303,7 +325,7 @@ function Table(rawData, meta, container = '.dash-table') {
     //console.log(hKeysFull, fKeys, rawDataInfo.length,rawDataInfo,data1.length,data1, data2.length, data2 );
 
     if (chartData.byDate.length)
-      chart = makeSparcle(chartSvg.node(), chartData.byDate, [0, chartData.stat.max], timeExtent, true );
+      chart = makeInfoSparcle(chartSvg, chartData.byDate, [0, chartData.dateStat.max], timeExtent, true );
 
     console.log(row, chartData, chart );
 

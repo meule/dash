@@ -1,16 +1,20 @@
 // jshint devel:true
 //'use strict';
 
-var APIurl = 'data.json',
+var APIurl = 'data2.json',
     container = '.dash-app',
     dash = {},
     raw,
-    meta = {};
+    meta = {},
+    redgreen = {
+      deltaRed: 0.1,
+      deltaGreen: -0.1
+    };
 
 var classes = [
-  { name: 'Class/Student', keys: ['ClassName','StudentName'] },
+  { name: 'Class / Student', keys: ['ClassName','StudentName'] },
   { name: 'Error type', keys: ['ErrorCategory','AssociatedStandard','ErrorType'] },
-  { name: 'Subject/Assignment', keys: ['SubjectName','AssignmentName'] },
+  { name: 'Subject / Assignment', keys: ['SubjectName','AssignmentName'] },
 ];
 
 var initView = function(){
@@ -25,7 +29,7 @@ var initView = function(){
   dash.hMenu = addSelector('hselector', selectH);
   dash.filter = selectors.append('div').classed('dash-filter', 1);
   dash.filter.name = dash.filter.append('div').classed('filter-name', 1);
-  dash.filter.list = dash.filter.append('div').classed('filter-list', 1)
+  dash.filter.list = dash.filter.append('div').classed('filter-list', 1);
 
   dash.tableWrap = d3.select(container).append('div').classed('dash-table', 1);
 };
@@ -41,7 +45,6 @@ var selectH = function(d){
   dash.hMenu.classed('active', 0).filter( dd => d.name == dd.name ).classed('active', 1);
   updateFilter( classes.find( dd => dd.name != d.name && dd.name != dash.vClass.name ) );
 
-  meta
   meta.hKeys = d.keys.map(d=>d).slice(0, -1);
   meta.hKeysFull = d.keys.map(d=>d);
   meta.hKeys.unshift('overall');
@@ -49,9 +52,11 @@ var selectH = function(d){
   meta.vKeys.unshift('overall');
   meta.vName = dash.vClass.name;
   meta.hName = dash.hClass.name;
-  console.log(raw, meta)
+  meta.redgreen = redgreen;
 
-  dash.table = new Table(raw, meta);
+  console.log(raw, meta);
+
+  dash.table = new T(raw, meta);
 };
 var updateFilter = function(d){
   var overall = 'All ' + d.name + 's',
@@ -89,7 +94,7 @@ var updateFilter = function(d){
       return isEqual;
     });
     console.log(raw.length, rawFiltered.length);
-    dash.table = new Table(rawFiltered, meta)  ;
+    dash.table = new T(rawFiltered, meta)  ;
   }
 };
 
@@ -119,17 +124,14 @@ initView();
 function addDates(raw){
   //console.log(raw);
     raw.forEach(function(d){
+      /*
       var num = 1;
-      if (!d.AssignmentName)
-        d.AssignmentName = "Essay #" + Math.round(8 * Math.random() + 1);
-      if (d.AssignmentName.indexOf('Essay') != -1) {
-        num = +d.AssignmentName.replace('Essay #', '');
-      } else if (d.AssignmentName == "WritingPoint Demo") {
-        num = 7;
-      } else if (d.AssignmentName == "My Vacation") {
-        num = 8;
-      }
-      d._date = new Date(2015, 7, num * 3);
+      d.AssignmentName = d.AssignmentName || '';
+      num = d.AssignmentName.match(/\d+/);
+      num = num || Math.round(20 * Math.random() + 1)
+      d._date = new Date((new Date(2015, 7, 1)).valueOf() + num * 3 * 24 * 60 * 60 * 1000);
+      */
+      d._date = new Date(d.ErrorDateTimeUtc);
       d.date = d3.time.format('%Y.%m.%d')(d._date);
       //console.log(num, d.date);
     });
