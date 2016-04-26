@@ -1,7 +1,7 @@
 // jshint devel:true
 //'use strict';
 
-var APIurl = 'data2.json',
+var APIurl = 'data/data2.json',
     container = '.dash-app',
     dash = {},
     raw,

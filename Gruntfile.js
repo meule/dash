@@ -160,6 +160,26 @@ module.exports = function (grunt) {
       }
     },
 
+    uglify: {
+      dist: {
+        files: [{
+          expand: true,
+          cwd: '.tmp/concat/scripts',
+          src: '{,*/}*.js',
+          dest: '<%= config.dist %>/scripts'
+        }]
+      }
+    },
+
+    concat: {
+      dist: {
+        files: [{
+          src: '.tmp/scripts/{,*/}*.js',
+          dest: '.tmp/concat/scripts/main.js'
+        }]
+      }
+    },
+
     postcss: {
       options: {
         map: true,
@@ -308,6 +328,7 @@ module.exports = function (grunt) {
           src: [
             '*.{ico,png,txt}',
             'images/{,*/}*.webp',
+            'data/{,*/}*.*',
             '{,*/}*.html',
             'styles/fonts/{,*/}*.*'
           ]
@@ -333,7 +354,7 @@ module.exports = function (grunt) {
         'copy:styles'
       ],
       dist: [
-        'babel',
+        'babel:dist',
         'copy:styles',
         'imagemin',
         'svgmin'
@@ -385,8 +406,10 @@ module.exports = function (grunt) {
     'concurrent:dist',
     'postcss',
     'concat',
+    'concat:dist',
     'cssmin',
     'uglify',
+    'uglify:dist',
     'copy:dist',
     'filerev',
     'usemin',
